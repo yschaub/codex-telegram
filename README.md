@@ -139,7 +139,7 @@ Use `/repo` to list cloned repos in your workspace, or `/repo <name>` to switch 
 
 Set `AGENTIC_MODE=false` to enable the full 13-command terminal-like interface with directory navigation, inline keyboards, quick actions, git integration, and session export.
 
-**Commands:** `/start`, `/help`, `/new`, `/continue`, `/end`, `/status`, `/cd`, `/ls`, `/pwd`, `/projects`, `/export`, `/actions`, `/git`  
+**Commands:** `/start`, `/help`, `/new`, `/continue`, `/end`, `/status`, `/cd`, `/ls`, `/pwd`, `/projects`, `/export`, `/actions`, `/git`
 If `ENABLE_PROJECT_THREADS=true`: `/sync_threads`
 
 ```
@@ -309,7 +309,7 @@ See [SECURITY.md](SECURITY.md) for details.
 ## Development
 
 ```bash
-make dev           # Install all dependencies
+make dev           # Install all dependencies (+ pre-commit hook if available)
 make test          # Run tests with coverage
 make lint          # Black + isort + flake8 + mypy
 make format        # Auto-format code

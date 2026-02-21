@@ -21,7 +21,15 @@ install:
 
 dev:
 	poetry install
-	poetry run pre-commit install --install-hooks || echo "pre-commit not configured yet"
+	@if [ -f .pre-commit-config.yaml ]; then \
+		if poetry run pre-commit --version >/dev/null 2>&1; then \
+			poetry run pre-commit install || echo "pre-commit hooks were not installed"; \
+		else \
+			echo "Skipping pre-commit hook install (pre-commit is not installed)."; \
+		fi; \
+	else \
+		echo "Skipping pre-commit hook install (.pre-commit-config.yaml not found)."; \
+	fi
 
 test:
 	poetry run pytest

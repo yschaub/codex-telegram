@@ -29,10 +29,7 @@ This document provides detailed information for developers working on the Codex 
    make dev
    ```
 
-4. **Set up pre-commit hooks** (optional but recommended):
-   ```bash
-   poetry run pre-commit install
-   ```
+4. **Pre-commit hooks** are installed automatically by `make dev` when `pre-commit` is available.
 
 5. **Create configuration file**:
    ```bash
@@ -159,7 +156,7 @@ from typing import Optional, List, Dict, Any
 from pathlib import Path
 
 def process_config(
-    settings: Settings, 
+    settings: Settings,
     overrides: Optional[Dict[str, Any]] = None
 ) -> Path:
     """Process configuration with optional overrides."""
@@ -220,7 +217,7 @@ def test_feature_with_config():
         debug=True,
         codex_max_turns=5
     )
-    
+
     # Test implementation
     assert config.debug is True
     assert config.codex_max_turns == 5
@@ -252,7 +249,7 @@ We aim for >80% test coverage. Current coverage:
 
 #### TODO-1: Project Structure
 - Complete package layout with proper Python packaging
-- Poetry dependency management with dev/test/prod separation  
+- Poetry dependency management with dev/test/prod separation
 - Makefile with development commands
 - Exception hierarchy with proper inheritance
 - Structured logging with JSON output for production
@@ -351,7 +348,7 @@ ENABLE_QUICK_ACTIONS=true
 ```bash
 # Basic run with environment variables
 export TELEGRAM_BOT_TOKEN=test_token
-export TELEGRAM_BOT_USERNAME=test_bot  
+export TELEGRAM_BOT_USERNAME=test_bot
 export APPROVED_DIRECTORY=/tmp/test_projects
 make run-debug
 
