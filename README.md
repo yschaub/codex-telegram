@@ -68,6 +68,8 @@ make run          # Production
 make run-debug    # With debug logging
 ```
 
+For server deployments, run the bot under a process manager/daemon so it keeps running after you disconnect.
+
 Message your bot on Telegram to get started.
 
 > **Detailed setup:** See [docs/setup.md](docs/setup.md) for Codex authentication options and troubleshooting.
