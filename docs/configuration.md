@@ -64,6 +64,11 @@ DISABLE_TOOL_VALIDATION=false
 # Optional codex binary/model overrides
 CODEX_CLI_PATH=/usr/local/bin/codex
 CODEX_MODEL=
+# Default execution mode: pass `--yolo` to codex exec
+CODEX_YOLO=true
+# Extra flags still work. If you need to control sandbox/approval flags via extra args,
+# set CODEX_YOLO=false first to avoid conflicting execution-mode options.
+CODEX_EXTRA_ARGS=--search
 
 # Maximum conversation turns before requiring new session
 CODEX_MAX_TURNS=10

@@ -58,7 +58,9 @@ def config(tmp_path: Path) -> Settings:
 
 @pytest.fixture
 def manager(config: Settings) -> CodexSDKManager:
-    with patch("src.codex.sdk_integration.find_codex_cli", return_value="/usr/bin/codex"):
+    with patch(
+        "src.codex.sdk_integration.find_codex_cli", return_value="/usr/bin/codex"
+    ):
         return CodexSDKManager(config)
 
 
@@ -88,7 +90,7 @@ class TestCodexSDKManager:
         assert isinstance(response, CodexResponse)
         assert response.session_id == "thread-123"
         assert "--output-last-message" not in called_cmd
-        assert "--full-auto" in called_cmd
+        assert "--yolo" in called_cmd
         assert "--sandbox" not in called_cmd
         assert response.content == "hello"
         assert response.num_turns == 1
@@ -130,7 +132,7 @@ class TestCodexSDKManager:
         assert called_cmd.index("--skip-git-repo-check") < called_cmd.index(
             "thread-existing"
         )
-        assert "--full-auto" in called_cmd
+        assert "--yolo" in called_cmd
         assert "--sandbox" not in called_cmd
         assert "--output-last-message" not in called_cmd
         assert response.session_id == "thread-existing"
@@ -203,6 +205,63 @@ class TestCodexSDKManager:
         assert "--sandbox" not in called_cmd
         assert "--search" in called_cmd
         assert "--output-last-message" not in called_cmd
+
+    async def test_execute_command_can_disable_yolo_and_use_workspace_sandbox(
+        self, manager: CodexSDKManager
+    ):
+        manager.config.codex_yolo = False
+        manager.config.sandbox_enabled = True
+        called_cmd = []
+
+        async def _create_process(*cmd, **kwargs):
+            called_cmd.extend(list(cmd))
+            return _MockProcess(
+                stdout_lines=[b'{"type":"response.output_text.delta","delta":"ok"}\n'],
+                returncode=0,
+            )
+
+        with patch(
+            "src.codex.sdk_integration.asyncio.create_subprocess_exec",
+            side_effect=_create_process,
+        ):
+            await manager.execute_command(
+                prompt="hello",
+                working_directory=Path("/tmp"),
+            )
+
+        assert "--yolo" not in called_cmd
+        assert "--sandbox" in called_cmd
+        assert "workspace-write" in called_cmd
+
+    async def test_execute_command_deduplicates_yolo_alias_from_extra_args(
+        self, manager: CodexSDKManager
+    ):
+        manager.config.codex_extra_args = [
+            "--yolo",
+            "--dangerously-bypass-approvals-and-sandbox",
+            "--search",
+        ]
+        called_cmd = []
+
+        async def _create_process(*cmd, **kwargs):
+            called_cmd.extend(list(cmd))
+            return _MockProcess(
+                stdout_lines=[b'{"type":"response.output_text.delta","delta":"ok"}\n'],
+                returncode=0,
+            )
+
+        with patch(
+            "src.codex.sdk_integration.asyncio.create_subprocess_exec",
+            side_effect=_create_process,
+        ):
+            await manager.execute_command(
+                prompt="hello",
+                working_directory=Path("/tmp"),
+            )
+
+        yolo_aliases = {"--yolo", "--dangerously-bypass-approvals-and-sandbox"}
+        assert sum(1 for arg in called_cmd if arg in yolo_aliases) == 1
+        assert "--search" in called_cmd
 
     async def test_execute_command_applies_max_budget_config(
         self, manager: CodexSDKManager
@@ -313,7 +372,9 @@ class TestCodexSDKManager:
     ):
         async def _create_process(*cmd, **kwargs):
             return _MockProcess(
-                stdout_lines=[b'{"type":"response.output_text.delta","delta":"partial"}\n'],
+                stdout_lines=[
+                    b'{"type":"response.output_text.delta","delta":"partial"}\n'
+                ],
                 stderr_lines=[
                     b"Warning: no last agent message; wrote empty content to /tmp/out.txt\n"
                 ],
@@ -336,7 +397,9 @@ class TestCodexSDKManager:
     ):
         async def _create_process(*cmd, **kwargs):
             return _MockProcess(
-                stdout_lines=[b'{"type":"response.output_text.delta","delta":"hello"}\n'],
+                stdout_lines=[
+                    b'{"type":"response.output_text.delta","delta":"hello"}\n'
+                ],
                 stderr_lines=[b"internal warning\n"],
                 returncode=1,
             )

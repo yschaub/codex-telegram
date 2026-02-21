@@ -87,10 +87,10 @@ class Settings(BaseSettings):
         description="Optional per-request Codex budget cap in USD",
         validation_alias=AliasChoices("CODEX_MAX_BUDGET_USD"),
     )
-    codex_full_auto: bool = Field(
+    codex_yolo: bool = Field(
         True,
-        description="Enable Codex full-auto mode for non-interactive execution",
-        validation_alias=AliasChoices("CODEX_FULL_AUTO"),
+        description="Enable Codex YOLO mode (--yolo) for non-interactive execution",
+        validation_alias=AliasChoices("CODEX_YOLO"),
     )
     codex_max_turns: int = Field(
         DEFAULT_CODEX_MAX_TURNS,

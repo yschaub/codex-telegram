@@ -364,14 +364,15 @@ class CodexSDKManager:
             # For `codex exec resume`, options must come before SESSION_ID.
             # Also, current Codex versions don't accept `--sandbox` in resume mode.
             cmd.extend(["--json", "--skip-git-repo-check"])
-            if getattr(self.config, "codex_full_auto", True):
-                cmd.append("--full-auto")
+            if getattr(self.config, "codex_yolo", True):
+                cmd.append("--yolo")
         else:
             cmd.extend(["--json", "--skip-git-repo-check"])
 
-            # Use explicit sandbox mode for predictable server-side behavior.
-            if self.config.sandbox_enabled and getattr(self.config, "codex_full_auto", True):
-                cmd.append("--full-auto")
+            # Default to YOLO mode unless explicitly disabled in config.
+            if getattr(self.config, "codex_yolo", True):
+                cmd.append("--yolo")
+            # Otherwise use explicit sandbox mode for predictable behavior.
             elif self.config.sandbox_enabled:
                 cmd.extend(["--sandbox", "workspace-write"])
             else:
@@ -409,8 +410,18 @@ class CodexSDKManager:
             extra_args = sanitized_args
 
         for arg in extra_args:
-            if isinstance(arg, str) and arg.strip():
-                cmd.append(arg.strip())
+            if not isinstance(arg, str):
+                continue
+
+            cleaned = arg.strip()
+            if not cleaned:
+                continue
+
+            yolo_aliases = {"--yolo", "--dangerously-bypass-approvals-and-sandbox"}
+            if cleaned in yolo_aliases and any(flag in cmd for flag in yolo_aliases):
+                continue
+
+            cmd.append(cleaned)
 
         if is_resume and session_id:
             cmd.append(session_id)
@@ -470,7 +481,12 @@ class CodexSDKManager:
         error_text = self._extract_error_text(event)
         if error_text:
             state["event_errors"].append(error_text)
-            if error_text in {"error", "turn.failed", "response.failed", "session.failed"}:
+            if error_text in {
+                "error",
+                "turn.failed",
+                "response.failed",
+                "session.failed",
+            }:
                 logger.warning(
                     "Codex event error",
                     event_type=event_type,
@@ -478,7 +494,9 @@ class CodexSDKManager:
                     event_payload=event,
                 )
             else:
-                logger.warning("Codex event error", event_type=event_type, error=error_text)
+                logger.warning(
+                    "Codex event error", event_type=event_type, error=error_text
+                )
 
         text_chunks = self._extract_text_chunks(event)
         for text_chunk in text_chunks:
@@ -624,7 +642,12 @@ class CodexSDKManager:
     def _extract_error_text(self, event: Dict[str, Any]) -> Optional[str]:
         """Extract structured error text from Codex JSON events."""
         event_type = str(event.get("type", "")).lower()
-        if event_type not in {"error", "turn.failed", "response.failed", "session.failed"}:
+        if event_type not in {
+            "error",
+            "turn.failed",
+            "response.failed",
+            "session.failed",
+        }:
             return None
 
         parts: List[str] = []
@@ -649,7 +672,9 @@ class CodexSDKManager:
                 if isinstance(item, str) and item.strip():
                     parts.append(item.strip())
                 elif isinstance(item, dict):
-                    msg = item.get("message") or item.get("detail") or item.get("reason")
+                    msg = (
+                        item.get("message") or item.get("detail") or item.get("reason")
+                    )
                     if isinstance(msg, str) and msg.strip():
                         parts.append(msg.strip())
 
@@ -732,9 +757,11 @@ class CodexSDKManager:
             tool_calls.append(
                 {
                     "name": canonical,
-                    "input": event.get("input")
-                    if isinstance(event.get("input"), dict)
-                    else {},
+                    "input": (
+                        event.get("input")
+                        if isinstance(event.get("input"), dict)
+                        else {}
+                    ),
                 }
             )
             return tool_calls
@@ -742,7 +769,11 @@ class CodexSDKManager:
         # Shell command events (best-effort mapping for existing UI)
         command = event.get("command")
         if isinstance(command, str) and command.strip():
-            if "exec.command" in event_type or "shell" in event_type or "bash" in event_type:
+            if (
+                "exec.command" in event_type
+                or "shell" in event_type
+                or "bash" in event_type
+            ):
                 tool_calls.append(
                     {
                         "name": "Bash",
@@ -762,9 +793,11 @@ class CodexSDKManager:
                 tool_calls.append(
                     {
                         "name": canonical,
-                        "input": nested.get("input")
-                        if isinstance(nested.get("input"), dict)
-                        else {},
+                        "input": (
+                            nested.get("input")
+                            if isinstance(nested.get("input"), dict)
+                            else {}
+                        ),
                     }
                 )
 
