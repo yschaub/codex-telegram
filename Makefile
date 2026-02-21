@@ -1,4 +1,6 @@
-.PHONY: install dev test lint format clean help run run-debug smoke-codex run-remote remote-attach remote-stop
+.PHONY: check-poetry install dev test lint format clean help run run-debug smoke-codex run-remote remote-attach remote-stop
+
+POETRY ?= poetry
 
 # Default target
 help:
@@ -16,14 +18,21 @@ help:
 	@echo "  remote-attach - Attach to running bot tmux session"
 	@echo "  remote-stop   - Stop the bot tmux session"
 
-install:
-	poetry install --no-dev
+check-poetry:
+	@if ! command -v $(POETRY) >/dev/null 2>&1; then \
+		echo "Poetry is required but was not found in PATH."; \
+		echo "Install Poetry: https://python-poetry.org/docs/#installation"; \
+		exit 1; \
+	fi
 
-dev:
-	poetry install
+install: check-poetry
+	$(POETRY) install --no-dev
+
+dev: check-poetry
+	$(POETRY) install
 	@if [ -f .pre-commit-config.yaml ]; then \
-		if poetry run pre-commit --version >/dev/null 2>&1; then \
-			poetry run pre-commit install || echo "pre-commit hooks were not installed"; \
+		if $(POETRY) run pre-commit --version >/dev/null 2>&1; then \
+			$(POETRY) run pre-commit install || echo "pre-commit hooks were not installed"; \
 		else \
 			echo "Skipping pre-commit hook install (pre-commit is not installed)."; \
 		fi; \
@@ -31,18 +40,18 @@ dev:
 		echo "Skipping pre-commit hook install (.pre-commit-config.yaml not found)."; \
 	fi
 
-test:
-	poetry run pytest
+test: check-poetry
+	$(POETRY) run pytest
 
-lint:
-	poetry run black --check src tests
-	poetry run isort --check-only src tests
-	poetry run flake8 src tests
-	poetry run mypy src
+lint: check-poetry
+	$(POETRY) run black --check src tests
+	$(POETRY) run isort --check-only src tests
+	$(POETRY) run flake8 src tests
+	$(POETRY) run mypy src
 
-format:
-	poetry run black src tests
-	poetry run isort src tests
+format: check-poetry
+	$(POETRY) run black src tests
+	$(POETRY) run isort src tests
 
 clean:
 	find . -type d -name __pycache__ -exec rm -rf {} + 2>/dev/null || true
@@ -50,20 +59,20 @@ clean:
 	find . -type d -name "*.egg-info" -exec rm -rf {} + 2>/dev/null || true
 	rm -rf .coverage htmlcov/ .pytest_cache/ dist/ build/
 
-run:
-	poetry run python -m src.main
+run: check-poetry
+	$(POETRY) run python -m src.main
 
 # For debugging
-run-debug:
-	poetry run python -m src.main --debug
+run-debug: check-poetry
+	$(POETRY) run python -m src.main --debug
 
-smoke-codex:
-	poetry run python scripts/codex_smoke.py
+smoke-codex: check-poetry
+	$(POETRY) run python scripts/codex_smoke.py
 
 # Remote Mac Mini (SSH session)
-run-remote:  ## Start bot on remote Mac in tmux (persists after SSH disconnect)
+run-remote: check-poetry  ## Start bot on remote Mac in tmux (persists after SSH disconnect)
 	security unlock-keychain ~/Library/Keychains/login.keychain-db
-	tmux new-session -d -s codex-bot 'poetry run python -m src.main'
+	tmux new-session -d -s codex-bot '$(POETRY) run python -m src.main'
 	@echo "Bot started in tmux session 'codex-bot'"
 	@echo "  Attach: make remote-attach"
 	@echo "  Stop:   make remote-stop"
