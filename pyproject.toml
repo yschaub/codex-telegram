@@ -1,0 +1,87 @@
+[project]
+name = "codex-code-telegram"
+version = "1.0.0"
+description = "Telegram bot for remote Codex CLI access with comprehensive configuration management"
+readme = "README.md"
+license = "MIT"
+authors = [
+    {name = "Richard Atkinson", email = "richardatk01@gmail.com"},
+]
+keywords = ["telegram", "bot", "codex", "ai", "development", "remote", "coding"]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Developers",
+    "Operating System :: OS Independent",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: Communications :: Chat",
+    "Topic :: Software Development",
+    "Topic :: System :: Shells",
+]
+requires-python = ">=3.11"
+dynamic = ["dependencies"]
+
+[project.urls]
+Homepage = "https://github.com/yschaub/claude-code-telegram"
+Repository = "https://github.com/yschaub/claude-code-telegram"
+Documentation = "https://github.com/yschaub/claude-code-telegram/blob/main/docs/"
+
+[project.scripts]
+codex-telegram-bot = "src.main:run"
+
+[build-system]
+requires = ["poetry-core>=2.0.0"]
+build-backend = "poetry.core.masonry.api"
+
+[tool.poetry]
+packages = [{include = "src"}]
+
+[tool.poetry.dependencies]
+python = "^3.11"
+python-telegram-bot = "^22.6"
+structlog = "^25.4.0"
+pydantic = "^2.11.5"
+pydantic-settings = "^2.9.1"
+python-dotenv = "^1.0.0"
+aiofiles = "^24.1.0"
+aiosqlite = "^0.21.0"
+fastapi = "^0.115.0"
+uvicorn = {version = "^0.34.0", extras = ["standard"]}
+apscheduler = "^3.10"
+PyYAML = "^6.0.2"
+
+[tool.poetry.group.dev.dependencies]
+pytest = "^8.4.0"
+pytest-asyncio = "^1.0.0"
+pytest-cov = "^6.1.1"
+pytest-mock = "^3.14.1"
+black = "^25.1.0"
+isort = "^6.0.1"
+flake8 = "^7.2.0"
+mypy = "^1.16.0"
+autoflake = "^2.3.2"
+
+[tool.black]
+line-length = 88
+target-version = ['py311']
+
+[tool.isort]
+profile = "black"
+line_length = 88
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+python_files = "test_*.py"
+addopts = "-v --cov=src --cov-report=html --cov-report=term-missing"
+asyncio_mode = "auto"
+
+[tool.mypy]
+python_version = "3.11"
+warn_return_any = true
+warn_unused_configs = true
+disallow_untyped_defs = true
+
+[tool.flake8]
+max-line-length = 88
+extend-ignore = ["E203", "W503"]

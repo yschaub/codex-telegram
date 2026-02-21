@@ -1,0 +1,10 @@
+projects:
+  - slug: codex-code-telegram
+    name: Codex Code Telegram
+    path: codex-code-telegram-main
+    enabled: true
+
+  - slug: infra
+    name: Infrastructure
+    path: infrastructure
+    enabled: true

@@ -1,0 +1,469 @@
+"""Test Codex session management."""
+
+from datetime import UTC, datetime, timedelta
+from pathlib import Path
+from typing import Dict, List, Optional
+
+import pytest
+
+from src.codex.sdk_integration import CodexResponse
+from src.codex.session import CodexSession, SessionManager
+from src.codex.tool_authorizer import DefaultToolAuthorizer
+from src.config.settings import Settings
+
+
+class _MonitorConfigStub:
+    """Minimal config object for ToolMonitor tests."""
+
+    def __init__(self, disable_tool_validation: bool):
+        self.disable_tool_validation = disable_tool_validation
+        self.codex_allowed_tools = ["Read"]
+        self.codex_disallowed_tools = ["Bash"]
+
+
+class _ValidatorStub:
+    """Minimal security validator stub for ToolMonitor tests."""
+
+    def __init__(self, should_allow_path: bool = True):
+        self.should_allow_path = should_allow_path
+
+    def validate_path(self, file_path: str, working_directory: Path):
+        if self.should_allow_path:
+            return True, working_directory / file_path, None
+        return False, None, "invalid path"
+
+
+class _MemorySessionStorage:
+    """Minimal in-memory storage used by SessionManager tests."""
+
+    def __init__(self):
+        self.sessions: Dict[str, CodexSession] = {}
+
+    async def save_session(self, session: CodexSession) -> None:
+        self.sessions[session.session_id] = session
+
+    async def load_session(self, session_id: str) -> Optional[CodexSession]:
+        return self.sessions.get(session_id)
+
+    async def delete_session(self, session_id: str) -> None:
+        self.sessions.pop(session_id, None)
+
+    async def get_user_sessions(self, user_id: int) -> List[CodexSession]:
+        return [s for s in self.sessions.values() if s.user_id == user_id]
+
+    async def get_all_sessions(self) -> List[CodexSession]:
+        return list(self.sessions.values())
+
+
+class TestCodexSession:
+    """Test CodexSession class."""
+
+    def test_session_creation(self):
+        """Test session creation."""
+        session = CodexSession(
+            session_id="test-session",
+            user_id=123,
+            project_path=Path("/test/path"),
+            created_at=datetime.now(UTC),
+            last_used=datetime.now(UTC),
+        )
+
+        assert session.session_id == "test-session"
+        assert session.user_id == 123
+        assert session.project_path == Path("/test/path")
+        assert session.total_cost == 0.0
+        assert session.total_turns == 0
+        assert session.message_count == 0
+        assert session.tools_used == []
+
+    def test_session_expiry(self):
+        """Test session expiry logic."""
+        now = datetime.now(UTC)
+        old_time = now - timedelta(hours=25)
+
+        session = CodexSession(
+            session_id="test-session",
+            user_id=123,
+            project_path=Path("/test/path"),
+            created_at=old_time,
+            last_used=old_time,
+        )
+
+        # Should be expired after 24 hours
+        assert session.is_expired(24) is True
+        assert session.is_expired(48) is False
+
+    def test_update_usage(self):
+        """Test usage update."""
+        session = CodexSession(
+            session_id="test-session",
+            user_id=123,
+            project_path=Path("/test/path"),
+            created_at=datetime.now(UTC),
+            last_used=datetime.now(UTC),
+        )
+
+        response = CodexResponse(
+            content="Test response",
+            session_id="test-session",
+            cost=0.05,
+            duration_ms=1000,
+            num_turns=2,
+            tools_used=[{"name": "Read"}, {"name": "Write"}],
+        )
+
+        session.update_usage(response)
+
+        assert session.total_cost == 0.05
+        assert session.total_turns == 2
+        assert session.message_count == 1
+        assert "Read" in session.tools_used
+        assert "Write" in session.tools_used
+
+    def test_to_dict_and_from_dict(self):
+        """Test serialization/deserialization."""
+        original = CodexSession(
+            session_id="test-session",
+            user_id=123,
+            project_path=Path("/test/path"),
+            created_at=datetime.now(UTC),
+            last_used=datetime.now(UTC),
+            total_cost=0.05,
+            total_turns=2,
+            message_count=1,
+            tools_used=["Read", "Write"],
+        )
+
+        # Convert to dict and back
+        data = original.to_dict()
+        restored = CodexSession.from_dict(data)
+
+        assert restored.session_id == original.session_id
+        assert restored.user_id == original.user_id
+        assert restored.project_path == original.project_path
+        assert restored.total_cost == original.total_cost
+        assert restored.total_turns == original.total_turns
+        assert restored.message_count == original.message_count
+        assert restored.tools_used == original.tools_used
+
+    def test_from_dict_normalizes_legacy_naive_timestamps(self):
+        """Legacy naive timestamps should be normalized to UTC-aware datetimes."""
+        data = {
+            "session_id": "test-session",
+            "user_id": 123,
+            "project_path": "/test/path",
+            "created_at": "2026-02-18T10:00:00",
+            "last_used": "2026-02-18T10:30:00",
+            "total_cost": 0.0,
+            "total_turns": 0,
+            "message_count": 0,
+            "tools_used": [],
+        }
+
+        restored = CodexSession.from_dict(data)
+
+        assert restored.created_at.tzinfo is not None
+        assert restored.last_used.tzinfo is not None
+        assert restored.created_at.tzinfo == UTC
+        assert restored.last_used.tzinfo == UTC
+
+    def test_is_expired_handles_legacy_naive_last_used(self):
+        """Expiry check should not crash on naive legacy timestamps."""
+        # Simulate legacy naive UTC timestamp persisted without tzinfo.
+        naive_old = datetime.now(UTC).replace(tzinfo=None) - timedelta(hours=30)
+        session = CodexSession(
+            session_id="legacy-session",
+            user_id=123,
+            project_path=Path("/test/path"),
+            created_at=naive_old,
+            last_used=naive_old,
+        )
+
+        assert session.is_expired(24) is True
+
+
+class TestMemorySessionStorage:
+    """Test in-memory session storage helper used by tests."""
+
+    @pytest.fixture
+    def storage(self):
+        """Create storage instance."""
+        return _MemorySessionStorage()
+
+    @pytest.fixture
+    def sample_session(self):
+        """Create sample session."""
+        return CodexSession(
+            session_id="test-session",
+            user_id=123,
+            project_path=Path("/test/path"),
+            created_at=datetime.now(UTC),
+            last_used=datetime.now(UTC),
+        )
+
+    async def test_save_and_load_session(self, storage, sample_session):
+        """Test saving and loading session."""
+        # Save session
+        await storage.save_session(sample_session)
+
+        # Load session
+        loaded = await storage.load_session("test-session")
+        assert loaded is not None
+        assert loaded.session_id == sample_session.session_id
+        assert loaded.user_id == sample_session.user_id
+
+    async def test_load_nonexistent_session(self, storage):
+        """Test loading non-existent session."""
+        result = await storage.load_session("nonexistent")
+        assert result is None
+
+    async def test_delete_session(self, storage, sample_session):
+        """Test deleting session."""
+        # Save and then delete
+        await storage.save_session(sample_session)
+        await storage.delete_session("test-session")
+
+        # Should no longer exist
+        result = await storage.load_session("test-session")
+        assert result is None
+
+    async def test_get_user_sessions(self, storage):
+        """Test getting user sessions."""
+        # Create sessions for different users
+        session1 = CodexSession(
+            session_id="session1",
+            user_id=123,
+            project_path=Path("/test/path1"),
+            created_at=datetime.now(UTC),
+            last_used=datetime.now(UTC),
+        )
+        session2 = CodexSession(
+            session_id="session2",
+            user_id=123,
+            project_path=Path("/test/path2"),
+            created_at=datetime.now(UTC),
+            last_used=datetime.now(UTC),
+        )
+        session3 = CodexSession(
+            session_id="session3",
+            user_id=456,
+            project_path=Path("/test/path3"),
+            created_at=datetime.now(UTC),
+            last_used=datetime.now(UTC),
+        )
+
+        await storage.save_session(session1)
+        await storage.save_session(session2)
+        await storage.save_session(session3)
+
+        # Get sessions for user 123
+        user_sessions = await storage.get_user_sessions(123)
+        assert len(user_sessions) == 2
+        assert all(s.user_id == 123 for s in user_sessions)
+
+        # Get sessions for user 456
+        user_sessions = await storage.get_user_sessions(456)
+        assert len(user_sessions) == 1
+        assert user_sessions[0].user_id == 456
+
+
+class TestSessionManager:
+    """Test session manager."""
+
+
+class TestToolMonitorConfigBypass:
+    """Test ToolMonitor behavior when tool validation is disabled."""
+
+    async def test_validate_tool_call_bypasses_allowlist_when_disabled(self):
+        monitor = DefaultToolAuthorizer(
+            _MonitorConfigStub(disable_tool_validation=True), None
+        )
+
+        allowed, error = await monitor.validate_tool_call(
+            tool_name="TotallyCustomTool",
+            tool_input={},
+            working_directory=Path("/tmp"),
+            user_id=123,
+        )
+
+        assert allowed is True
+        assert error is None
+        assert monitor.tool_usage["TotallyCustomTool"] == 1
+
+    async def test_validate_tool_call_enforces_allowlist_when_enabled(self):
+        monitor = DefaultToolAuthorizer(
+            _MonitorConfigStub(disable_tool_validation=False), None
+        )
+
+        allowed, error = await monitor.validate_tool_call(
+            tool_name="TotallyCustomTool",
+            tool_input={},
+            working_directory=Path("/tmp"),
+            user_id=123,
+        )
+
+        assert allowed is False
+        assert "Tool not allowed" in (error or "")
+
+    async def test_disable_tool_validation_still_rejects_invalid_file_path(self):
+        validator = _ValidatorStub(should_allow_path=False)
+        monitor = DefaultToolAuthorizer(
+            _MonitorConfigStub(disable_tool_validation=True), validator
+        )
+
+        allowed, error = await monitor.validate_tool_call(
+            tool_name="Read",
+            tool_input={"file_path": "../secret"},
+            working_directory=Path("/tmp"),
+            user_id=123,
+        )
+
+        assert allowed is False
+        assert error == "invalid path"
+
+    async def test_disable_tool_validation_still_rejects_dangerous_bash(self):
+        monitor = DefaultToolAuthorizer(
+            _MonitorConfigStub(disable_tool_validation=True), None
+        )
+
+        allowed, error = await monitor.validate_tool_call(
+            tool_name="Bash",
+            tool_input={"command": "echo test > /tmp/out"},
+            working_directory=Path("/tmp"),
+            user_id=123,
+        )
+
+        assert allowed is False
+        assert "Dangerous command pattern detected" in (error or "")
+
+    @pytest.fixture
+    def config(self, tmp_path):
+        """Create test config."""
+        return Settings(
+            telegram_bot_token="test:token",
+            telegram_bot_username="testbot",
+            approved_directory=tmp_path,
+            session_timeout_hours=24,
+            max_sessions_per_user=2,
+        )
+
+    @pytest.fixture
+    def storage(self):
+        """Create storage instance."""
+        return _MemorySessionStorage()
+
+    @pytest.fixture
+    def session_manager(self, config, storage):
+        """Create session manager."""
+        return SessionManager(config, storage)
+
+    async def test_create_new_session(self, session_manager):
+        """Test creating new session."""
+        session = await session_manager.get_or_create_session(
+            user_id=123,
+            project_path=Path("/test/project"),
+        )
+
+        assert session.user_id == 123
+        assert session.project_path == Path("/test/project")
+        assert session.is_new_session is True
+        assert session.session_id == ""  # Empty until Codex responds
+
+    async def test_get_existing_session(self, session_manager):
+        """Test getting existing session by ID after it has a real session_id."""
+        # Simulate a session that has already received a real ID from Codex
+        existing = CodexSession(
+            session_id="real-session-id",
+            user_id=123,
+            project_path=Path("/test/project"),
+            created_at=datetime.now(UTC),
+            last_used=datetime.now(UTC),
+        )
+        await session_manager.storage.save_session(existing)
+        session_manager.active_sessions["real-session-id"] = existing
+
+        # Get same session by ID
+        session2 = await session_manager.get_or_create_session(
+            user_id=123,
+            project_path=Path("/test/project"),
+            session_id="real-session-id",
+        )
+
+        assert session2.session_id == "real-session-id"
+
+    async def test_session_limit_enforcement(self, session_manager):
+        """Test session limit enforcement."""
+        # Seed sessions that have already received real IDs (simulating
+        # the full create -> Codex responds -> update_session lifecycle)
+        for i, path in enumerate(["/test/project1", "/test/project2"], start=1):
+            s = CodexSession(
+                session_id=f"session-{i}",
+                user_id=123,
+                project_path=Path(path),
+                created_at=datetime.now(UTC),
+                last_used=datetime.now(UTC) - timedelta(hours=i),  # older = higher i
+            )
+            await session_manager.storage.save_session(s)
+            session_manager.active_sessions[s.session_id] = s
+
+        # Verify we have 2 sessions
+        assert len(await session_manager._get_user_sessions(123)) == 2
+
+        # Creating third session should remove the oldest (session-2)
+        await session_manager.get_or_create_session(
+            user_id=123, project_path=Path("/test/project3")
+        )
+
+        # After eviction, only session-1 remains persisted
+        # (session-2 evicted, session-3 is new/unsaved so not yet in storage)
+        persisted = await session_manager._get_user_sessions(123)
+        assert len(persisted) == 1  # Only session-1 persisted
+        assert persisted[0].session_id == "session-1"
+
+        # session-2 should be gone
+        loaded = await session_manager.storage.load_session("session-2")
+        assert loaded is None
+
+
+class TestUpdateSessionNewWithoutId:
+    """Edge case: Codex returns no session_id for a brand-new session."""
+
+    @pytest.fixture
+    def config(self, tmp_path):
+        return Settings(
+            telegram_bot_token="test:token",
+            telegram_bot_username="testbot",
+            approved_directory=tmp_path,
+            session_timeout_hours=24,
+            max_sessions_per_user=2,
+        )
+
+    @pytest.fixture
+    def session_manager(self, config):
+        return SessionManager(config, _MemorySessionStorage())
+
+    async def test_warns_and_does_not_persist(self, session_manager):
+        """When Codex returns no session_id, session is not persisted."""
+        session = await session_manager.get_or_create_session(
+            user_id=999, project_path=Path("/test/no-id")
+        )
+        assert session.is_new_session is True
+
+        # Simulate Codex returning empty session_id
+        response = CodexResponse(
+            content="hello",
+            session_id="",
+            cost=0.001,
+            duration_ms=50,
+            num_turns=1,
+        )
+
+        await session_manager.update_session(session, response)
+
+        # Session should be marked as no longer new
+        assert session.is_new_session is False
+
+        # Session should NOT be persisted (empty session_id)
+        assert len(session_manager.active_sessions) == 0
+        persisted = await session_manager._get_user_sessions(999)
+        assert len(persisted) == 0
