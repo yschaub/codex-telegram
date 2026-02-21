@@ -34,7 +34,7 @@ Bot: Running pytest...
 ### 1. Prerequisites
 
 - **Python 3.11+** -- [Download here](https://www.python.org/downloads/)
-- **Poetry** -- Modern Python dependency management
+- **Poetry** -- Modern Python dependency management ([install instructions](https://python-poetry.org/docs/#installation))
 - **Codex CLI** -- Install and authenticate on the host machine (`codex login`)
 - **Telegram Bot Token** -- Get one from [@BotFather](https://t.me/botfather)
 
@@ -45,6 +45,9 @@ git clone https://github.com/yschaub/codex-telegram.git
 cd codex-telegram
 make dev
 ```
+
+If `make dev` fails with `poetry: No such file or directory`, install Poetry first:
+[https://python-poetry.org/docs/#installation](https://python-poetry.org/docs/#installation)
 
 ### 3. Configure
 
