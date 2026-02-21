@@ -212,6 +212,8 @@ ALLOWED_USERS=123456789          # Comma-separated Telegram user IDs
 CODEX_CLI_PATH=/usr/local/bin/codex
 CODEX_MODEL=                      # Optional model override
 CODEX_HOME=/opt/codex-home        # Optional
+CODEX_YOLO=true                   # Default: runs Codex with --yolo
+CODEX_EXTRA_ARGS=--search         # Optional extras; set CODEX_YOLO=false to manage sandbox/approval flags yourself
 CODEX_MAX_COST_PER_USER=10.0     # Spending limit per user (USD)
 CODEX_TIMEOUT_SECONDS=300        # Operation timeout
 
