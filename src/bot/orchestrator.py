@@ -332,6 +332,12 @@ class MessageOrchestrator:
             group=10,
         )
 
+        # Voice uploads -> Whisper -> Codex
+        app.add_handler(
+            MessageHandler(filters.VOICE, self._inject_deps(self.agentic_voice)),
+            group=10,
+        )
+
         # Only cd: callbacks (for project selection), scoped by pattern
         app.add_handler(
             CallbackQueryHandler(
@@ -382,6 +388,10 @@ class MessageOrchestrator:
         )
         app.add_handler(
             MessageHandler(filters.PHOTO, self._inject_deps(message.handle_photo)),
+            group=10,
+        )
+        app.add_handler(
+            MessageHandler(filters.VOICE, self._inject_deps(message.handle_voice)),
             group=10,
         )
         app.add_handler(
@@ -707,20 +717,23 @@ class MessageOrchestrator:
 
         return _on_stream
 
-    async def agentic_text(
-        self, update: Update, context: ContextTypes.DEFAULT_TYPE
+    async def _agentic_run_prompt(
+        self,
+        update: Update,
+        context: ContextTypes.DEFAULT_TYPE,
+        message_text: str,
+        audit_command: str,
     ) -> None:
-        """Direct Codex passthrough. Simple progress. No suggestions."""
+        """Run a text prompt through Codex in agentic mode."""
         user_id = update.effective_user.id
-        message_text = update.message.text
 
         logger.info(
-            "Agentic text message",
+            "Agentic prompt message",
             user_id=user_id,
             message_length=len(message_text),
+            source=audit_command,
         )
 
-        # Rate limit check
         rate_limiter = context.bot_data.get("rate_limiter")
         if rate_limiter:
             allowed, limit_message = await rate_limiter.check_rate_limit(user_id, 0.001)
@@ -745,19 +758,13 @@ class MessageOrchestrator:
             "current_directory", self.settings.approved_directory
         )
         session_id = get_session_id(context.user_data)
-
-        # Check if /new was used — skip auto-resume for this first message.
-        # Flag is only cleared after a successful run so retries keep the intent.
         force_new = bool(context.user_data.get("force_new_session"))
 
-        # --- Verbose progress tracking via stream callback ---
         tool_log: List[Dict[str, Any]] = []
         start_time = time.time()
         on_stream = self._make_stream_callback(
             verbose_level, progress_msg, tool_log, start_time
         )
-
-        # Independent typing heartbeat — stays alive even with no stream events
         heartbeat = self._start_typing_heartbeat(chat)
 
         success = True
@@ -771,20 +778,17 @@ class MessageOrchestrator:
                 force_new=force_new,
             )
 
-            # New session created successfully — clear the one-shot flag
             if force_new:
                 context.user_data["force_new_session"] = False
 
             set_session_id(context.user_data, codex_response.session_id)
 
-            # Track directory changes
             from .handlers.message import _update_working_directory_from_codex_response
 
             _update_working_directory_from_codex_response(
                 codex_response, context, self.settings, user_id
             )
 
-            # Store interaction
             storage = context.bot_data.get("storage")
             if storage:
                 try:
@@ -798,13 +802,10 @@ class MessageOrchestrator:
                 except Exception as e:
                     logger.warning("Failed to log interaction", error=str(e))
 
-            # Format response (no reply_markup — strip keyboards)
             from .utils.formatting import ResponseFormatter
 
             formatter = ResponseFormatter(self.settings)
-            formatted_messages = formatter.format_codex_response(
-                codex_response.content
-            )
+            formatted_messages = formatter.format_codex_response(codex_response.content)
 
         except CodexToolValidationError as e:
             success = False
@@ -832,7 +833,7 @@ class MessageOrchestrator:
                 await update.message.reply_text(
                     message.text,
                     parse_mode=message.parse_mode,
-                    reply_markup=None,  # No keyboards in agentic mode
+                    reply_markup=None,
                     reply_to_message_id=(update.message.message_id if i == 0 else None),
                 )
                 if i < len(formatted_messages) - 1:
@@ -861,14 +862,64 @@ class MessageOrchestrator:
                         ),
                     )
 
-        # Audit log
         audit_logger = context.bot_data.get("audit_logger")
         if audit_logger:
             await audit_logger.log_command(
                 user_id=user_id,
-                command="text_message",
+                command=audit_command,
                 args=[message_text[:100]],
                 success=success,
+            )
+
+    async def agentic_text(
+        self, update: Update, context: ContextTypes.DEFAULT_TYPE
+    ) -> None:
+        """Direct text prompt passthrough in agentic mode."""
+        await self._agentic_run_prompt(
+            update=update,
+            context=context,
+            message_text=update.message.text,
+            audit_command="text_message",
+        )
+
+    async def agentic_voice(
+        self, update: Update, context: ContextTypes.DEFAULT_TYPE
+    ) -> None:
+        """Transcribe voice with Whisper, then send transcript to Codex."""
+        user_id = update.effective_user.id
+        features = context.bot_data.get("features")
+        voice_handler = features.get_voice_handler() if features else None
+
+        if not voice_handler:
+            await update.message.reply_text(
+                "Voice transcription is not configured. "
+                "Set WHISPER_API_KEY to enable it."
+            )
+            return
+
+        progress_msg = await update.message.reply_text(
+            "🎙️ Transcribing voice message..."
+        )
+        try:
+            result = await voice_handler.transcribe_voice(update.message.voice)
+            if not result.text:
+                await progress_msg.edit_text(
+                    "Could not transcribe this voice message. Please try again."
+                )
+                return
+
+            await progress_msg.delete()
+            prompt = result.text
+            await self._agentic_run_prompt(
+                update=update,
+                context=context,
+                message_text=prompt,
+                audit_command="voice_message",
+            )
+        except Exception as e:
+            logger.error("Voice transcription failed", user_id=user_id, error=str(e))
+            await progress_msg.edit_text(
+                f"❌ Voice transcription failed: {str(e)[:250]}"
             )
 
     async def agentic_document(
@@ -986,9 +1037,7 @@ class MessageOrchestrator:
             from .utils.formatting import ResponseFormatter
 
             formatter = ResponseFormatter(self.settings)
-            formatted_messages = formatter.format_codex_response(
-                codex_response.content
-            )
+            formatted_messages = formatter.format_codex_response(codex_response.content)
 
             await progress_msg.delete()
 
@@ -1076,9 +1125,7 @@ class MessageOrchestrator:
             from .utils.formatting import ResponseFormatter
 
             formatter = ResponseFormatter(self.settings)
-            formatted_messages = formatter.format_codex_response(
-                codex_response.content
-            )
+            formatted_messages = formatter.format_codex_response(codex_response.content)
 
             await progress_msg.delete()
 
@@ -1096,9 +1143,7 @@ class MessageOrchestrator:
             from .handlers.message import _format_error_message
 
             await progress_msg.edit_text(_format_error_message(e), parse_mode="HTML")
-            logger.error(
-                "Codex photo processing failed", error=str(e), user_id=user_id
-            )
+            logger.error("Codex photo processing failed", error=str(e), user_id=user_id)
 
     async def agentic_repo(
         self, update: Update, context: ContextTypes.DEFAULT_TYPE

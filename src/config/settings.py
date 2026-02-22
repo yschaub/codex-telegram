@@ -138,6 +138,11 @@ class Settings(BaseSettings):
         description="List of explicitly disallowed Codex tools/commands",
         validation_alias=AliasChoices("CODEX_DISALLOWED_TOOLS"),
     )
+    whisper_api_key: Optional[SecretStr] = Field(
+        None,
+        description="OpenAI API key used for Whisper voice transcription",
+        validation_alias=AliasChoices("WHISPER_API_KEY"),
+    )
 
     # Sandbox settings
     sandbox_enabled: bool = Field(
@@ -461,4 +466,11 @@ class Settings(BaseSettings):
         """Get auth token secret as string."""
         if self.auth_token_secret:
             return self.auth_token_secret.get_secret_value()
+        return None
+
+    @property
+    def whisper_api_key_str(self) -> Optional[str]:
+        """Get Whisper API key as string."""
+        if self.whisper_api_key:
+            return self.whisper_api_key.get_secret_value()
         return None

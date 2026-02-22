@@ -368,16 +368,25 @@ def _format_process_error(error_str: str) -> str:
 
 
 async def handle_text_message(
-    update: Update, context: ContextTypes.DEFAULT_TYPE
+    update: Update,
+    context: ContextTypes.DEFAULT_TYPE,
+    prompt_override: Optional[str] = None,
+    audit_command: str = "text_message",
 ) -> None:
     """Handle regular text messages as Codex prompts."""
     user_id = update.effective_user.id
-    message_text = update.message.text
+    message_text = (
+        prompt_override if prompt_override is not None else update.message.text
+    )
     settings: Settings = context.bot_data["settings"]
 
     # Get services
     rate_limiter: Optional[RateLimiter] = context.bot_data.get("rate_limiter")
     audit_logger: Optional[AuditLogger] = context.bot_data.get("audit_logger")
+
+    if not message_text:
+        await update.message.reply_text("❌ Empty message received.")
+        return
 
     logger.info(
         "Processing text message", user_id=user_id, message_length=len(message_text)
@@ -478,9 +487,7 @@ async def handle_text_message(
             from ..utils.formatting import ResponseFormatter
 
             formatter = ResponseFormatter(settings)
-            formatted_messages = formatter.format_codex_response(
-                codex_response.content
-            )
+            formatted_messages = formatter.format_codex_response(codex_response.content)
 
         except CodexToolValidationError as e:
             # Tool validation error with detailed instructions
@@ -545,7 +552,7 @@ async def handle_text_message(
                     )
 
         # Update session info
-        context.user_data["last_message"] = update.message.text
+        context.user_data["last_message"] = message_text
 
         # Add conversation enhancements if available
         features = context.bot_data.get("features")
@@ -597,8 +604,8 @@ async def handle_text_message(
         if audit_logger:
             await audit_logger.log_command(
                 user_id=user_id,
-                command="text_message",
-                args=[update.message.text[:100]],  # First 100 chars
+                command=audit_command,
+                args=[message_text[:100]],  # First 100 chars
                 success=True,
             )
 
@@ -617,12 +624,53 @@ async def handle_text_message(
         if audit_logger:
             await audit_logger.log_command(
                 user_id=user_id,
-                command="text_message",
-                args=[update.message.text[:100]],
+                command=audit_command,
+                args=[message_text[:100]],
                 success=False,
             )
 
         logger.error("Error processing text message", error=str(e), user_id=user_id)
+
+
+async def handle_voice(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Handle Telegram voice messages via Whisper transcription."""
+    features = context.bot_data.get("features")
+    voice_handler = features.get_voice_handler() if features else None
+
+    if not voice_handler:
+        await update.message.reply_text(
+            "🎙️ <b>Voice Transcription Not Configured</b>\n\n"
+            "Set <code>WHISPER_API_KEY</code> to enable Telegram voice messages.",
+            parse_mode="HTML",
+        )
+        return
+
+    progress_msg = await update.message.reply_text(
+        "🎙️ Transcribing voice message...", parse_mode="HTML"
+    )
+
+    try:
+        result = await voice_handler.transcribe_voice(update.message.voice)
+        if not result.text:
+            await progress_msg.edit_text(
+                "❌ Could not transcribe this voice message. Please try again.",
+                parse_mode="HTML",
+            )
+            return
+
+        await progress_msg.delete()
+        await handle_text_message(
+            update,
+            context,
+            prompt_override=result.text,
+            audit_command="voice_message",
+        )
+    except Exception as e:
+        logger.error("Voice transcription failed", error=str(e))
+        await progress_msg.edit_text(
+            f"❌ <b>Voice transcription failed</b>\n\n{escape_html(str(e)[:300])}",
+            parse_mode="HTML",
+        )
 
 
 async def handle_document(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -801,9 +849,7 @@ async def handle_document(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
             from ..utils.formatting import ResponseFormatter
 
             formatter = ResponseFormatter(settings)
-            formatted_messages = formatter.format_codex_response(
-                codex_response.content
-            )
+            formatted_messages = formatter.format_codex_response(codex_response.content)
 
             # Delete progress message
             await codex_progress_msg.delete()
@@ -1143,7 +1189,5 @@ def _update_working_directory_from_codex_response(
 
             except (ValueError, OSError) as e:
                 # Invalid path, skip this match
-                logger.debug(
-                    "Invalid path in Codex response", path=match, error=str(e)
-                )
+                logger.debug("Invalid path in Codex response", path=match, error=str(e))
                 continue

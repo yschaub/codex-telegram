@@ -16,6 +16,7 @@ from .git_integration import GitIntegration
 from .image_handler import ImageHandler
 from .quick_actions import QuickActionManager
 from .session_export import SessionExporter
+from .voice_handler import WhisperVoiceHandler
 
 logger = structlog.get_logger(__name__)
 
@@ -85,6 +86,14 @@ class FeatureRegistry:
             except Exception as e:
                 logger.error("Failed to initialize conversation enhancer", error=str(e))
 
+        # Voice transcription (Whisper) - requires API key
+        if self.config.whisper_api_key_str:
+            try:
+                self.features["voice_handler"] = WhisperVoiceHandler(config=self.config)
+                logger.info("Voice handler feature enabled")
+            except Exception as e:
+                logger.error("Failed to initialize voice handler", error=str(e))
+
         logger.info(
             "Feature initialization complete",
             enabled_features=list(self.features.keys()),
@@ -121,6 +130,10 @@ class FeatureRegistry:
     def get_conversation_enhancer(self) -> Optional[ConversationEnhancer]:
         """Get conversation enhancer feature"""
         return self.get_feature("conversation")
+
+    def get_voice_handler(self) -> Optional[WhisperVoiceHandler]:
+        """Get voice transcription feature."""
+        return self.get_feature("voice_handler")
 
     def get_enabled_features(self) -> Dict[str, Any]:
         """Get all enabled features"""
