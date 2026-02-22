@@ -180,6 +180,7 @@ Enable with `ENABLE_API_SERVER=true` and `ENABLE_SCHEDULER=true`. See [docs/setu
 - Rate limiting with token bucket algorithm
 - Directory sandboxing with path traversal prevention
 - File upload handling with archive extraction
+- Telegram voice message transcription via OpenAI Whisper (`WHISPER_API_KEY`), with automatic chunking for long recordings
 - Image/screenshot upload with analysis
 - Git integration with safe repository operations
 - Quick actions system with context-aware buttons
@@ -221,6 +222,7 @@ CODEX_YOLO=true                   # Default: runs Codex with --yolo
 CODEX_EXTRA_ARGS=--search         # Optional extras; set CODEX_YOLO=false to manage sandbox/approval flags yourself
 CODEX_MAX_COST_PER_USER=10.0     # Spending limit per user (USD)
 CODEX_TIMEOUT_SECONDS=300        # Operation timeout
+WHISPER_API_KEY=                  # Optional: enables Telegram voice transcription with Whisper
 
 # Mode
 AGENTIC_MODE=true                # Agentic (default) or classic mode
@@ -235,6 +237,8 @@ ENABLE_GIT_INTEGRATION=true
 ENABLE_FILE_UPLOADS=true
 ENABLE_QUICK_ACTIONS=true
 ```
+
+For long voice messages, automatic chunking uses `ffmpeg` before Whisper transcription.
 
 ### Agentic Platform
 
