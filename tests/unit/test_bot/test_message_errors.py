@@ -28,3 +28,11 @@ def test_format_process_error_exit_status_with_events():
     assert "Codex exited with status 1" in text
     assert "turn.failed" in text
 
+
+def test_format_process_error_stream_limit():
+    text = _format_process_error(
+        "Codex process error: Codex CLI emitted a JSONL event larger than the "
+        "configured stream limit (1048576 bytes)."
+    )
+    assert "Backend Event Too Large" in text
+    assert "CODEX_STREAM_LIMIT_BYTES" in text

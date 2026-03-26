@@ -222,6 +222,7 @@ CODEX_YOLO=true                   # Default: runs Codex with --yolo
 CODEX_EXTRA_ARGS=--search         # Optional extras; set CODEX_YOLO=false to manage sandbox/approval flags yourself
 CODEX_MAX_COST_PER_USER=10.0     # Spending limit per user (USD)
 CODEX_TIMEOUT_SECONDS=300        # Operation timeout
+CODEX_STREAM_LIMIT_BYTES=8388608 # Max JSONL line size read from Codex stdout/stderr
 WHISPER_API_KEY=                  # Optional: enables Telegram voice transcription with Whisper
 
 # Mode
@@ -297,6 +298,7 @@ Message [@userinfobot](https://t.me/userinfobot) on Telegram -- it will reply wi
 - Verify `codex --version` works on the host machine
 - Run `codex login status` (must show logged in)
 - If needed, set `CODEX_CLI_PATH`
+- If you hit oversized JSONL event errors, raise `CODEX_STREAM_LIMIT_BYTES`
 - Check `CODEX_ALLOWED_TOOLS` includes necessary tools
 
 **High usage costs:**

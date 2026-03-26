@@ -15,7 +15,10 @@ async def get_codex_runtime_health(bot_data: Dict[str, Any]) -> Dict[str, str]:
     """Return cached Codex runtime health with lightweight auth probing."""
     now = time.monotonic()
     cached = bot_data.get(_CACHE_KEY)
-    if isinstance(cached, dict) and (now - float(cached.get("timestamp", 0.0))) < _CACHE_TTL_SECONDS:
+    if (
+        isinstance(cached, dict)
+        and (now - float(cached.get("timestamp", 0.0))) < _CACHE_TTL_SECONDS
+    ):
         return cached["value"]
 
     health: Dict[str, str] = {
@@ -49,9 +52,10 @@ async def get_codex_runtime_health(bot_data: Dict[str, Any]) -> Dict[str, str]:
             process.communicate(), timeout=_AUTH_STATUS_TIMEOUT_SECONDS
         )
         output = (
-            (stdout.decode("utf-8", errors="replace") + "\n" + stderr.decode("utf-8", errors="replace"))
-            .strip()
-        )
+            stdout.decode("utf-8", errors="replace")
+            + "\n"
+            + stderr.decode("utf-8", errors="replace")
+        ).strip()
         output_lower = output.lower()
 
         if "logged in" in output_lower and process.returncode == 0:
@@ -59,10 +63,14 @@ async def get_codex_runtime_health(bot_data: Dict[str, Any]) -> Dict[str, str]:
             health["auth_detail"] = output.splitlines()[0] if output else "Logged in"
         elif "not logged in" in output_lower:
             health["auth"] = "not_logged_in"
-            health["auth_detail"] = output.splitlines()[0] if output else "Not logged in"
+            health["auth_detail"] = (
+                output.splitlines()[0] if output else "Not logged in"
+            )
         else:
             health["auth"] = "unknown"
-            health["auth_detail"] = output.splitlines()[0] if output else f"Exit {process.returncode}"
+            health["auth_detail"] = (
+                output.splitlines()[0] if output else f"Exit {process.returncode}"
+            )
 
     except asyncio.TimeoutError:
         health["auth"] = "timeout"

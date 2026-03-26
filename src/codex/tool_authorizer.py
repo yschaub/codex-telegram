@@ -201,7 +201,14 @@ class DefaultToolAuthorizer:
                 logger.warning("Tool explicitly disallowed", **violation)
                 return False, f"Tool explicitly disallowed: {tool_name}"
 
-        if tool_name in ["create_file", "edit_file", "read_file", "Write", "Edit", "Read"]:
+        if tool_name in [
+            "create_file",
+            "edit_file",
+            "read_file",
+            "Write",
+            "Edit",
+            "Read",
+        ]:
             file_path = tool_input.get("path") or tool_input.get("file_path")
             if not file_path:
                 return False, "File path required"

@@ -326,6 +326,18 @@ def _format_process_error(error_str: str) -> str:
             "• Retry after restart"
         )
 
+    if "jsonl event larger than the configured stream limit" in error_lower:
+        return (
+            "📦 <b>Backend Event Too Large</b>\n\n"
+            "Codex produced an oversized JSON event and the backend could not "
+            "consume it cleanly.\n\n"
+            "<b>What you can do:</b>\n"
+            "• Retry the request\n"
+            "• Use <code>/new</code> if the session is noisy or stuck\n"
+            "• If you run the bot yourself, increase "
+            "<code>CODEX_STREAM_LIMIT_BYTES</code>"
+        )
+
     if "no last agent message; wrote empty content" in error_lower:
         return (
             "🗨️ <b>No Final Assistant Message</b>\n\n"
