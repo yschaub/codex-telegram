@@ -431,9 +431,7 @@ async def continue_session(update: Update, context: ContextTypes.DEFAULT_TYPE) -
             from ..utils.formatting import ResponseFormatter
 
             formatter = ResponseFormatter(settings)
-            formatted_messages = formatter.format_codex_response(
-                codex_response.content
-            )
+            formatted_messages = formatter.format_codex_response(codex_response.content)
 
             for msg in formatted_messages:
                 await update.message.reply_text(

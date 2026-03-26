@@ -339,7 +339,9 @@ class TestResumeFallback:
         await session_manager.storage.save_session(existing)
         session_manager.active_sessions[existing.session_id] = existing
 
-        first_error = CodexProcessError("Codex process error: Codex CLI exited with status 1")
+        first_error = CodexProcessError(
+            "Codex process error: Codex CLI exited with status 1"
+        )
         second_response = _make_mock_response(session_id="fresh-session-id")
 
         with patch.object(
