@@ -197,7 +197,7 @@ class Settings(BaseSettings):
 
     # Output verbosity (0=quiet, 1=normal, 2=detailed)
     verbose_level: int = Field(
-        1,
+        0,
         description=(
             "Bot output verbosity: 0=quiet (final response only), "
             "1=normal (tool names + reasoning), "

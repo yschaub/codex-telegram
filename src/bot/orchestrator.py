@@ -543,6 +543,35 @@ class MessageOrchestrator:
             return int(user_override)
         return self.settings.verbose_level
 
+    @staticmethod
+    def _build_codex_prompt(message_text: str, verbose_level: int) -> str:
+        """Attach per-turn response-style guidance for Codex."""
+        style_by_level = {
+            0: (
+                "Follow these response-style rules for this turn:\n"
+                "- Return only the final answer.\n"
+                "- Do not include progress updates, work logs, self-narration, or planning.\n"
+                "- Do not include lead-ins like 'I'm going to...', 'I found...', or 'Next I'll...'.\n"
+                "- Keep the answer concise unless the user explicitly asks for detail."
+            ),
+            1: (
+                "Follow these response-style rules for this turn:\n"
+                "- Respond directly to the user's request.\n"
+                "- Avoid multi-step work logs or repeated progress updates.\n"
+                "- A brief orienting sentence is fine, but focus on the answer."
+            ),
+            2: (
+                "Follow these response-style rules for this turn:\n"
+                "- You may include brief progress notes when they help.\n"
+                "- Keep progress notes concise and relevant.\n"
+                "- Prefer a fuller, more explanatory answer than level 1."
+            ),
+        }
+        style = style_by_level.get(verbose_level)
+        if not style:
+            return message_text
+        return f"{style}\n\nUser request:\n{message_text}"
+
     async def agentic_verbose(
         self, update: Update, context: ContextTypes.DEFAULT_TYPE
     ) -> None:
@@ -555,8 +584,8 @@ class MessageOrchestrator:
                 f"Verbosity: <b>{current}</b> ({labels.get(current, '?')})\n\n"
                 "Usage: <code>/verbose 0|1|2</code>\n"
                 "  0 = quiet (final response only)\n"
-                "  1 = normal (tools + reasoning)\n"
-                "  2 = detailed (tools with inputs + reasoning)",
+                "  1 = normal (concise progress + answer)\n"
+                "  2 = detailed (richer progress + answer)",
                 parse_mode="HTML",
             )
             return
@@ -745,6 +774,7 @@ class MessageOrchestrator:
         await chat.send_action("typing")
 
         verbose_level = self._get_verbose_level(context)
+        codex_prompt = self._build_codex_prompt(message_text, verbose_level)
         progress_msg = await update.message.reply_text("Working...")
 
         codex_integration = get_integration(context.bot_data)
@@ -770,7 +800,7 @@ class MessageOrchestrator:
         success = True
         try:
             codex_response = await codex_integration.run_command(
-                prompt=message_text,
+                prompt=codex_prompt,
                 working_directory=current_dir,
                 user_id=user_id,
                 session_id=session_id,
@@ -1007,6 +1037,7 @@ class MessageOrchestrator:
         force_new = bool(context.user_data.get("force_new_session"))
 
         verbose_level = self._get_verbose_level(context)
+        codex_prompt = self._build_codex_prompt(prompt, verbose_level)
         tool_log: List[Dict[str, Any]] = []
         on_stream = self._make_stream_callback(
             verbose_level, progress_msg, tool_log, time.time()
@@ -1015,7 +1046,7 @@ class MessageOrchestrator:
         heartbeat = self._start_typing_heartbeat(chat)
         try:
             codex_response = await codex_integration.run_command(
-                prompt=prompt,
+                prompt=codex_prompt,
                 working_directory=current_dir,
                 user_id=user_id,
                 session_id=session_id,
@@ -1099,6 +1130,9 @@ class MessageOrchestrator:
             force_new = bool(context.user_data.get("force_new_session"))
 
             verbose_level = self._get_verbose_level(context)
+            codex_prompt = self._build_codex_prompt(
+                processed_image.prompt, verbose_level
+            )
             tool_log: List[Dict[str, Any]] = []
             on_stream = self._make_stream_callback(
                 verbose_level, progress_msg, tool_log, time.time()
@@ -1107,7 +1141,7 @@ class MessageOrchestrator:
             heartbeat = self._start_typing_heartbeat(chat)
             try:
                 codex_response = await codex_integration.run_command(
-                    prompt=processed_image.prompt,
+                    prompt=codex_prompt,
                     working_directory=current_dir,
                     user_id=user_id,
                     session_id=session_id,

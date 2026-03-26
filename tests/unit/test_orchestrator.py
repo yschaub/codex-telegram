@@ -219,6 +219,28 @@ async def test_agentic_new_resets_session(agentic_settings, deps):
     update.message.reply_text.assert_called_once_with("Session reset. What's next?")
 
 
+def test_build_codex_prompt_quiet(agentic_settings, deps):
+    """Verbose 0 should suppress worklog-style assistant narration."""
+    orchestrator = MessageOrchestrator(agentic_settings, deps)
+
+    prompt = orchestrator._build_codex_prompt("Explain this repo", 0)
+
+    assert "Return only the final answer." in prompt
+    assert "Do not include progress updates" in prompt
+    assert prompt.endswith("User request:\nExplain this repo")
+
+
+def test_build_codex_prompt_detailed(agentic_settings, deps):
+    """Verbose 2 should allow more detailed progress notes."""
+    orchestrator = MessageOrchestrator(agentic_settings, deps)
+
+    prompt = orchestrator._build_codex_prompt("Explain this repo", 2)
+
+    assert "You may include brief progress notes when they help." in prompt
+    assert "Prefer a fuller, more explanatory answer than level 1." in prompt
+    assert prompt.endswith("User request:\nExplain this repo")
+
+
 async def test_agentic_status_compact(agentic_settings, deps):
     """Agentic /status returns compact one-line status."""
     orchestrator = MessageOrchestrator(agentic_settings, deps)

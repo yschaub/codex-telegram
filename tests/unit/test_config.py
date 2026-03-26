@@ -43,6 +43,7 @@ def test_settings_with_valid_data(tmp_path):
     assert settings.telegram_token_str == "test_token"
     assert settings.telegram_bot_username == "test_bot"
     assert settings.approved_directory == test_dir
+    assert settings.verbose_level == 0
 
 
 def test_allowed_users_parsing():
@@ -533,6 +534,7 @@ def test_create_test_config():
     assert str(config.approved_directory).endswith("test_projects")
     assert config.debug is True
     assert config.database_url == "sqlite:///:memory:"
+    assert config.verbose_level == 0
 
     # Test with overrides
     config = create_test_config(
