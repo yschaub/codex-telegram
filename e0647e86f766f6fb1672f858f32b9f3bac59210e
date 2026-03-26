@@ -1,0 +1,21 @@
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.1.19",
+  "base_commit_sha": "e0647e86f766f6fb1672f858f32b9f3bac59210e",
+  "prompts": {
+    "7c88ddc4ae7126c3": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "019ce080-c527-7e01-9b59-c784a832d495",
+        "model": "gpt-5.4"
+      },
+      "human_author": "Yann Schaub <yschaub@users.noreply.github.com>",
+      "messages": [],
+      "total_additions": 59,
+      "total_deletions": 1,
+      "accepted_lines": 59,
+      "overriden_lines": 0
+    }
+  }
+}
