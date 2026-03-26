@@ -28,7 +28,10 @@ class _Stream:
             await asyncio.sleep(self._delay)
         if not self._lines:
             return b""
-        return self._lines.pop(0)
+        item = self._lines.pop(0)
+        if isinstance(item, Exception):
+            raise item
+        return item
 
 
 class _MockProcess:
@@ -67,9 +70,11 @@ def manager(config: Settings) -> CodexSDKManager:
 class TestCodexSDKManager:
     async def test_execute_command_success(self, manager: CodexSDKManager):
         called_cmd = []
+        called_kwargs = {}
 
         async def _create_process(*cmd, **kwargs):
             called_cmd.extend(list(cmd))
+            called_kwargs.update(kwargs)
             stdout_lines = [
                 b'{"type":"thread.started","thread_id":"thread-123"}\n',
                 b'{"type":"turn.started"}\n',
@@ -92,6 +97,7 @@ class TestCodexSDKManager:
         assert "--output-last-message" not in called_cmd
         assert "--yolo" in called_cmd
         assert "--sandbox" not in called_cmd
+        assert called_kwargs["limit"] == manager.config.codex_stream_limit_bytes
         assert response.content == "hello"
         assert response.num_turns == 1
         assert response.duration_ms >= 0
@@ -414,6 +420,55 @@ class TestCodexSDKManager:
             )
 
         assert response.content == "hello"
+
+    async def test_execute_command_recovers_after_oversized_stdout_event(
+        self, manager: CodexSDKManager
+    ):
+        async def _create_process(*cmd, **kwargs):
+            return _MockProcess(
+                stdout_lines=[
+                    ValueError("Separator is found, but chunk is longer than limit"),
+                    b'{"type":"response.output_text.delta","delta":"hello"}\n',
+                ],
+                returncode=0,
+            )
+
+        with patch(
+            "src.codex.sdk_integration.asyncio.create_subprocess_exec",
+            side_effect=_create_process,
+        ):
+            response = await manager.execute_command(
+                prompt="hello",
+                working_directory=Path("/tmp"),
+            )
+
+        assert response.content == "hello"
+
+    async def test_execute_command_surfaces_oversized_stdout_event_on_failure(
+        self, manager: CodexSDKManager
+    ):
+        async def _create_process(*cmd, **kwargs):
+            return _MockProcess(
+                stdout_lines=[
+                    ValueError("Separator is found, but chunk is longer than limit")
+                ],
+                returncode=1,
+            )
+
+        with patch(
+            "src.codex.sdk_integration.asyncio.create_subprocess_exec",
+            side_effect=_create_process,
+        ):
+            with pytest.raises(CodexProcessError) as exc_info:
+                await manager.execute_command(
+                    prompt="hello",
+                    working_directory=Path("/tmp"),
+                )
+
+        assert (
+            "jsonl event larger than the configured stream limit"
+            in str(exc_info.value).lower()
+        )
 
     async def test_warning_no_last_message_without_output_does_not_set_new_session(
         self, manager: CodexSDKManager

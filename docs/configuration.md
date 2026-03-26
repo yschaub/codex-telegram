@@ -76,6 +76,9 @@ CODEX_MAX_TURNS=10
 # Timeout for Codex operations in seconds
 CODEX_TIMEOUT_SECONDS=300
 
+# Maximum stdout/stderr line size to accept from Codex subprocess streams
+CODEX_STREAM_LIMIT_BYTES=8388608
+
 # Maximum cost per user in USD
 CODEX_MAX_COST_PER_USER=10.0
 

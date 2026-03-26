@@ -164,6 +164,7 @@ class CodexSDKManager:
                     env=env,
                     stdout=asyncio.subprocess.PIPE,
                     stderr=asyncio.subprocess.PIPE,
+                    limit=self.config.codex_stream_limit_bytes,
                 )
             except FileNotFoundError as e:
                 raise CodexProcessError(
@@ -174,7 +175,21 @@ class CodexSDKManager:
             async def _read_stdout() -> None:
                 assert process.stdout is not None
                 while True:
-                    line = await process.stdout.readline()
+                    try:
+                        line = await process.stdout.readline()
+                    except ValueError as exc:
+                        message = (
+                            "Codex CLI emitted a JSONL event larger than the "
+                            f"configured stream limit "
+                            f"({self.config.codex_stream_limit_bytes} bytes)."
+                        )
+                        logger.warning(
+                            "Skipped oversized Codex stdout line",
+                            stream_limit_bytes=self.config.codex_stream_limit_bytes,
+                            error=str(exc),
+                        )
+                        state["event_errors"].append(message)
+                        continue
                     if not line:
                         break
 
@@ -208,7 +223,21 @@ class CodexSDKManager:
             async def _read_stderr() -> None:
                 assert process.stderr is not None
                 while True:
-                    line = await process.stderr.readline()
+                    try:
+                        line = await process.stderr.readline()
+                    except ValueError as exc:
+                        message = (
+                            "Codex CLI emitted a stderr line larger than the "
+                            f"configured stream limit "
+                            f"({self.config.codex_stream_limit_bytes} bytes)."
+                        )
+                        logger.warning(
+                            "Skipped oversized Codex stderr line",
+                            stream_limit_bytes=self.config.codex_stream_limit_bytes,
+                            error=str(exc),
+                        )
+                        state["stderr_lines"].append(message)
+                        continue
                     if not line:
                         break
                     text = line.decode("utf-8", errors="replace").rstrip()

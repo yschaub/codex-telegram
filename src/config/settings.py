@@ -18,6 +18,7 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 from src.utils.constants import (
     DEFAULT_CODEX_MAX_COST_PER_USER,
     DEFAULT_CODEX_MAX_TURNS,
+    DEFAULT_CODEX_STREAM_LIMIT_BYTES,
     DEFAULT_CODEX_TIMEOUT_SECONDS,
     DEFAULT_DATABASE_URL,
     DEFAULT_MAX_SESSIONS_PER_USER,
@@ -101,6 +102,12 @@ class Settings(BaseSettings):
         DEFAULT_CODEX_TIMEOUT_SECONDS,
         description="Codex timeout",
         validation_alias=AliasChoices("CODEX_TIMEOUT_SECONDS"),
+    )
+    codex_stream_limit_bytes: int = Field(
+        DEFAULT_CODEX_STREAM_LIMIT_BYTES,
+        description="Maximum stdout/stderr line size for Codex subprocess streams",
+        validation_alias=AliasChoices("CODEX_STREAM_LIMIT_BYTES"),
+        gt=0,
     )
     codex_max_cost_per_user: float = Field(
         DEFAULT_CODEX_MAX_COST_PER_USER,
