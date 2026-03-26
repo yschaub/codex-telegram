@@ -1,0 +1,31 @@
+src/bot/handlers/command.py
+  3979abecb677757f 434
+src/codex/tool_authorizer.py
+  3979abecb677757f 204-211
+src/bot/utils/runtime_health.py
+  3979abecb677757f 18-21,55-58,66-68,71-73
+tests/unit/test_codex/test_facade.py
+  3979abecb677757f 342-344
+tests/unit/test_bot/test_runtime_health.py
+  3979abecb677757f 23-27
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.1.19",
+  "base_commit_sha": "b07c0c272a88b7dc4d9dc10547d3305faa2ca3a3",
+  "prompts": {
+    "3979abecb677757f": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "019d2878-a479-7b40-8cfb-a57cab169de6",
+        "model": "gpt-5.4"
+      },
+      "human_author": "Yann Schaub <yschaub@users.noreply.github.com>",
+      "messages": [],
+      "total_additions": 31,
+      "total_deletions": 13,
+      "accepted_lines": 31,
+      "overriden_lines": 0
+    }
+  }
+}
